@@ -12,9 +12,29 @@ library(tidyverse)
 library(hierfstat)
 
 ### Read in VCF file ###
-vcf <- read.vcfR('finalANT.recode.vcf')
+vcf <- read.vcfR('finalQMC.recode.vcf')
 head(vcf)
 head(getFIX(vcf))
+
+
+GBS<- vcfR2genlight(vcf)
+GBS@ind.names
+length(GBS@ind.names)
+
+
+factorname <- factor(c("3","2","2","2","3","2","3","4","4","2","4","2","4","2","3","2","2","4","2","3")) # ANT
+factorname <- factor(c("2","2","2","3","3","3","3","3","2","2","2","2","2")) # BVK
+factorname <- factor(c("4","4","4","4","4","4","4","4","4","4","3","3","3","3","3","3","3","3","3","3")) # QMC
+factorname <- factor(c("4","3","4","4","4","3","3","3","3","4","3","4","4","4","4","3","4","3","4","3","3","3","3","4","4","3","4","3","3","4","4","3","3","3","4","4","4")) #CHW
+factorname <- factor(c("3","3","3","3","3","3","3","3","4","4","4","4","4","4","4","4","4","4")) #WGR
+
+length(factorname)
+
+
+GBS@pop <- factorname
+GBS@pop
+poplevels<-GBS@pop
+
 
 ### DEPTH INFO ###
 
@@ -45,22 +65,6 @@ ggplot(myMiss, aes(x=Sample, y=Missing)) + geom_col(fill=palette) + theme_bw() +
   labs(y='Missingness (%)') +theme(axis.title.x = element_blank(), axis.text.x = element_text(angle=60,hjust=1))+scale_y_continuous(expand = c(0,0))
 
 
-GBS<- vcfR2genlight(vcf)
-GBS@ind.names
-length(GBS@ind.names)
-
-factorname <- factor(c("3","2","2","2","3","2","3","4","4","2","4","2","4","2","3","2","2","4","2","3")) # ANT
-factorname <- factor(c("2","2","2","3","3","3","3","3","2","2","2","2","2")) # BVK
-factorname <- factor(c("4","4","4","4","4","4","4","4","4","4","3","3","3","3","3","3","3","3","3","3")) # QMC
-factorname <- factor(c("4","3","4","4","4","3","3","3","3","4","3","4","4","4","4","3","4","3","4","3","3","3","3","4","4","3","4","3","3","4","4","3","3","3","4","4","4")) #CHW
-factorname <- factor(c("3","3","3","3","3","3","3","3","4","4","4","4","4","4","4","4","4","4")) #WGR
-
-length(factorname)
-
-
-GBS@pop <- factorname
-GBS@pop
-poplevels<-GBS@pop
 
 ### 
 
@@ -88,7 +92,7 @@ GBS2 <- GBS[, !toRemove]
 glPca(GBS2)
 
 ## perform PCA
-pca1 <- glPca(GBS2, nf=3) # select 3
+pca1 <- glPca(GBS2, nf=4) # select 3
 
 ## plot eigenvalues
 par(mar = c(3, 3, 3, 3))
@@ -147,7 +151,7 @@ ggplot(pca_scores, aes(PC1, PC4)) +
 
 library(adegenet)
 test.dapc <- dapc(GBS)
-pnw.dapc <- dapc(GBS,n.pca = 10, n.da = 2) #14 and 4 seems to work ok; 20 and 3 is also interesting
+pnw.dapc <- dapc(GBS,n.pca = 13, n.da = 2) #14 and 4 seems to work ok; 20 and 3 is also interesting
 
 scatter(pnw.dapc, col = palette, cex = 2, legend = TRUE, clabel = F, posi.leg = "topright", scree.pca = TRUE, posi.pca = "bottomleft", posi.da = "topleft", cleg = 0.75)
 
@@ -174,3 +178,4 @@ p <- p + theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 8))
 p
 
 tinytex::install_tinytex()
+
