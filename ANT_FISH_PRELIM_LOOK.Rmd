@@ -1,0 +1,231 @@
+---
+title: "ANT_Preliminary_Look"
+author: "Clare I M Adams"
+date: "2022-09-21"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(vcfR)
+library(adegenet)
+library(ape)
+library(vegan)
+library(car)
+library(mmod)
+library(reshape2)
+library(tidyverse)
+library(hierfstat)
+
+```
+
+# R Markdown: Blue antimora
+
+This is a *preliminary* analysis of some Blue antimora *(Antimora rostrata)* data (ANT).
+
+You gotta read in all the info about the stuff
+
+```{r read in vcf, echo=FALSE}
+### Read in VCF file ###
+vcf <- read.vcfR('finalANT.recode.vcf')
+head(getFIX(vcf))
+
+```
+
+## Depth Information of SNPs
+
+SNP depth info per sample
+
+```{r depth info of SNPs, echo=FALSE}
+#Extract the depth info
+dp <- extract.gt(vcf, element = "DP", as.numeric=TRUE)
+dp[1:4,1:6]
+
+dpf <- melt(dp, varnames=c('Index', 'Sample'), value.name = 'Depth', na.rm=TRUE)
+
+palette=rep_len(c("#FF0000", "#FF6E00",  "#FFC300", "#FFFF00", "#AAD500", "#008000", "#005555", "#0000FF", "#3200AC", "#4B0082", "#812BA6", "#B857CA", "#D03A87"), 20)
+# change the end number to however many samples you have
+
+ggplot(dpf, aes(x=Sample, y=Depth)) + geom_boxplot(fill=palette) + theme_bw() +
+  theme(axis.title.x = element_blank(), axis.text.x = element_text(angle = 60, hjust = 1)) +
+  scale_y_continuous(trans=scales::log2_trans(), expand = c(0,0), breaks=c(1, 10, 100, 1000, 5000),
+                     minor_breaks=c(1:10, 2:10*10, 2:10*100, 2:5*1000)) +
+  theme(panel.grid.major.y=element_line(color = "#A9A9A9", size=0.6)) +
+  theme(panel.grid.minor.y=element_line(color = "#C0C0C0", size=0.2))
+```
+
+## Missingness and relatedness per sample
+
+How many SNP sites are missing per sample; a peek at the first little bit of the dataframe and then a graph per sample
+
+```{r Missingness per sample, echo=FALSE}
+
+myMiss <- apply(dp, MARGIN = 2, function(x){ sum(is.na(x)) })
+myMiss <- myMiss/nrow(vcf)
+myMiss <- data.frame((levels(dpf$Sample)), myMiss)
+colnames(myMiss) <- c('Sample', 'Missing')
+# change last number to however many samples you have
+ggplot(myMiss, aes(x=Sample, y=Missing)) + geom_col(fill=palette) + theme_bw() +
+  labs(y='Missingness (%)') +theme(axis.title.x = element_blank(), axis.text.x = element_text(angle=60,hjust=1))+scale_y_continuous(expand = c(0,0))
+
+```
+
+# GenLight/GenInd objects for use
+
+Create some GenLight objects for manipulation; overall looks okay in terms of mostly present alleles. Darker colors in second plot means greater differences between the individuals.
+
+```{r GenLight, echo=FALSE}
+
+GBS<- vcfR2genlight(vcf)
+GBS@ind.names
+#length(GBS@ind.names)
+factorname <- factor(c("3","2","2","2","3","2","3","4","4","2","4","2","4","2","3","2","2","4","2","3")) # ANT
+#length(factorname)
+GBS@pop <- factorname
+GBS@pop
+poplevels<-GBS@pop
+
+par(mar = c(5, 5, 5, 5))
+plot(GBS, col=heat.colors(3), bg="white")
+
+D<-dist(GBS)
+dfD <- as.data.frame(as.matrix(D))
+table.paint(dfD, cleg = 0, clabel.row = 0.5, clabel.col = 0.5)
+
+
+```
+
+
+# Neighbor Joining Tree
+
+Gotta show how these fish could be related. There are three populations we're drawing from although it looks like a somewhat mixed population. 
+
+
+```{r NJ Tree, echo=FALSE}
+
+par(mar = c(4, 3, 2, 3))
+par(mfrow=c(1,1))
+
+# basic tree
+tree <- njs(dist(as.matrix(GBS)))
+
+plot(tree, "phylogram", cex=0.75, FALSE, font=2, node.pos=1, edge.width=2, label.offset=0.5)
+tiplabels(pch=20, cex=1, col=c("#FF0000",  "#AAD500",  "#3200AC")[as.numeric(pop(GBS))])
+axisPhylo()
+title("Neighbour-joining tree of filtered ANT data")
+
+```
+
+# Some PCA plots
+
+PCA plots are OK for visualization; three axes were chosen but the eigenvalue plot is shown, followed by percentages of what the top axes contributions are. Note that the fourth population sometimes appears within the third population.
+
+```{r PCA plot, echo=FALSE}
+
+par(mfrow=c(1,1))
+
+#PCA plot
+pca1 <- glPca(GBS, nf=3)
+# Eigenvalues
+par(mar = c(3, 3, 3, 3))
+barplot(pca1$eig, main="Eigenvalues", col=heat.colors(length(pca1$eig)))
+
+eig.perc <- 100*pca1$eig/sum(pca1$eig)
+head(eig.perc)
+
+scatter(pca1, ratio=.2)
+
+s.class(pca1$scores, fac = GBS$pop, col=palette)
+text(pca1$scores,labels=indNames(GBS), cex=0.5)
+add.scatter.eig(pca1$eig,3,2,1,pos="bottomleft", inset=.01, ratio=.18)
+
+##retrieve the 10 PC scores to be used for plotting later
+pca_scores <- as.data.frame(pca1$scores)
+pca_scores$pop <- pop(GBS)
+
+ggplot(pca_scores, aes(PC1, PC2)) +
+  geom_point(size=3, aes(colour=pop), alpha = 0.7, shape=19) +
+  scale_color_manual(values = c("#FF0000",  "#AAD500",  "#3200AC")) +
+  theme_classic()
+
+ggplot(pca_scores, aes(PC2, PC3)) +
+  geom_point(size=3, aes(colour=pop), alpha = 0.7, shape=19) +
+  scale_color_manual(values = c("#FF0000",  "#AAD500",  "#3200AC")) +
+  theme_classic()
+
+ggplot(pca_scores, aes(PC1, PC3)) +
+  geom_point(size=3, aes(colour=pop), alpha = 0.7, shape=19) +
+  scale_color_manual(values = c("#FF0000",  "#AAD500",  "#3200AC")) +
+  theme_classic()
+
+
+```
+
+# Some other statistics
+
+Using a GenInd object, we can take a look at heterozygosity of Blue antimora (although I'm not sure I fully understand this plot).
+
+```{r stats GenInd, echo=FALSE}
+
+### GenInd objects ### 
+
+my_genind <- vcfR2genind(vcf)
+my_genind@pop <- factorname
+my_genind
+
+### Inbreeding ###
+
+#inBred <- inbreeding(my_genind)
+#Fbar <- sapply(inBred, mean)
+#hist(Fbar, col="firebrick", main="Average inbreeding in ant")
+
+### Some Stats ###
+
+toto <- summary(my_genind)
+#names(toto)
+par(mar = c(3, 3, 3, 3))
+barplot(toto$Hexp-toto$Hobs, main="Heterozygosity: expected-observed",ylab="Hexp - Hobs")
+par(mar = c(3, 3, 3, 3))
+#barplot(toto$n.by.pop,ylab="Number of samples",las=3)
+
+bartlett.test(list(toto$Hexp,toto$Hobs))
+t.test(toto$Hexp,toto$Hobs,pair=T,var.equal=TRUE,alter="greater")
+# observed heterozygosity is lower than mean expected heterozygosity
+
+
+```
+
+# DAPC
+
+I don't trust this DAPC but it looks interesting; running on 10 PCA axes and 2 DA axes
+
+```{r dapC, echo=FALSE}
+
+palette = c("#FF0000",  "#AAD500",  "#3200AC")
+pnw.dapc <- dapc(GBS,n.pca = 10, n.da = 2) #14 and 4 seems to work ok; 20 and 3 is also interesting
+
+scatter(pnw.dapc, col = palette, cex = 2, legend = TRUE, clabel = F, posi.leg = "topright", scree.pca = TRUE, posi.pca = "bottomleft", posi.da = "topleft", cleg = 0.75)
+
+par(mar = c(5, 5,5, 5))
+compoplot(pnw.dapc,col = palette, posi = 'top', show.lab=TRUE,cleg = 0.5)
+
+dapc.results <- as.data.frame(pnw.dapc$posterior)
+dapc.results$pop <- pop(GBS)
+dapc.results$indNames <- rownames(dapc.results)
+
+# library(reshape2)
+dapc.results <- melt(dapc.results)
+
+colnames(dapc.results) <- c("Original_Pop","Sample","Assigned_Pop","Posterior_membership_probability")
+
+p <- ggplot(dapc.results, aes(x=Sample, y=Posterior_membership_probability, fill=Assigned_Pop))
+p <- p + geom_bar(stat='identity') 
+p <- p + scale_fill_manual(values = palette) 
+p <- p + facet_grid(~Original_Pop, scales = "free")
+p <- p + theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 8))
+p
+
+
+```
