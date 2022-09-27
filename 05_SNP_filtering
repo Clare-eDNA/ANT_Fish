@@ -1,0 +1,43 @@
+#!/bin/bash -e
+
+### ANT fish filtering -- I usually do this by hand but you can script it if you want
+
+module load VCFtools/0.1.15-GCC-9.2.0-Perl-5.30.1
+
+vcftools --vcf populations.snps.vcf --max-missing 0.5 --maf 0.05 --minDP 3 --recode --recode-INFO-all --out miss50maf5dp3
+
+
+# --vcf - calls file
+# --max-missing = 50% of data allowed to be missing; this is pretty low
+# --remove-idels = to exclude indels, not included here
+# --maf = minor allele frequency of 5%, only include sites that have more than a minor allele freqency of 5% (gets rid of rare SNPs which could be base call error)
+# --minQ = would be minimum quality of 30, but we can't call for this because the quality isn't super great? Could try at minQ of 10 or 15...
+
+
+vcftools --vcf miss50maf5dp3.recode.vcf --missing-indv
+
+#now we want to know which individuals have a lot of SNPs missing
+
+cat out.imiss
+
+# what are those indidivuals?
+
+awk '$5 > 0.80' out.imiss | cut -f1 > lowDP-80.indv
+
+# make a file of the missing individuals that are over 80% missing (again, this is quite large; take a look at the other file)
+
+vcftools --vcf miss50maf5dp3.recode.vcf --remove lowDP-80.indv --recode --recode-INFO-all --out miss50maf5dp3INDV
+
+# filter out missing individuals
+
+vcftools --vcf miss50maf5dp3INDV.recode.vcf --min-meanDP 5 --recode --recode-INFO-all --out final
+
+# one more filter for minimum mean depth of SNPs (usually doesn't take out too many) and renames the final SNP file final.recode.vcf
+# Generally can do 'cp' or 'mv' to rename to finalANT.recode.vcf if you want to know which species it is
+
+vcftools --vcf final.recode.vcf --missing-site
+
+# some other code to see which sites/SNPs have a lot of missingness
+
+#There's a balance betweeen filtering out uninformative SNPs, filtering out low quality SNPs, and then also ensuring that you retain enough SNPs
+
